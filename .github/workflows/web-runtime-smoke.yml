@@ -1,6 +1,12 @@
 name: NW FloodWatch web runtime smoke
 
 on:
+  push:
+    branches:
+      - web-runtime-v1
+    paths:
+      - "web_runtime/**"
+      - ".github/workflows/web-runtime-smoke.yml"
   workflow_dispatch:
     inputs:
       run_mode:
@@ -23,6 +29,7 @@ jobs:
     timeout-minutes: 360
     env:
       PYTHONUNBUFFERED: "1"
+      RUN_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.run_mode || 'demo' }}
       COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
       COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
     steps:
@@ -50,7 +57,7 @@ jobs:
             --runtime-root .web_runtime/runtime/NW_FloodWatch_Definitivo \
             --site-dir web_runtime/site \
             --persistent-cache-dir .web_state/antecedent_cache \
-            --mode "${{ inputs.run_mode }}"
+            --mode "$RUN_MODE"
       - name: Validate payload
         run: |
           python - <<'PY'
@@ -66,7 +73,7 @@ jobs:
       - name: Upload site preview
         uses: actions/upload-artifact@v4
         with:
-          name: nw-floodwatch-site-${{ inputs.run_mode }}-${{ github.run_id }}
+          name: nw-floodwatch-site-${{ env.RUN_MODE }}-${{ github.run_id }}
           path: web_runtime/site
           if-no-files-found: error
           retention-days: 14
