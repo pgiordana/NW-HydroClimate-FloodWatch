@@ -1,0 +1,72 @@
+name: NW FloodWatch web runtime smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_mode:
+        description: "demo = layout only; full = real ECMWF/CMEMS operational chain"
+        required: true
+        default: demo
+        type: choice
+        options: [demo, full]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nw-floodwatch-web-runtime-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  web-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      PYTHONUNBUFFERED: "1"
+      COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
+      COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Download and verify immutable runtime
+        run: python web_runtime/bootstrap_runtime.py
+      - name: Install runtime dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r .web_runtime/runtime/NW_FloodWatch_Definitivo/requirements.txt
+      - name: Restore antecedent cache
+        uses: actions/cache@v4
+        with:
+          path: .web_state/antecedent_cache
+          key: nwfloodwatch-antecedent-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            nwfloodwatch-antecedent-${{ runner.os }}-
+      - name: Run headless wrapper
+        run: |
+          python web_runtime/run_web_pipeline.py \
+            --runtime-root .web_runtime/runtime/NW_FloodWatch_Definitivo \
+            --site-dir web_runtime/site \
+            --persistent-cache-dir .web_state/antecedent_cache \
+            --mode "${{ inputs.run_mode }}"
+      - name: Validate payload
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('web_runtime/site/data/latest.json')
+          d=json.loads(p.read_text())
+          assert d['schema']=='nwfloodwatch.web.latest.v1'
+          assert d['official_warning_use_allowed'] is False
+          assert len(d.get('receptors',[]))==20
+          print('STATIC WEB PAYLOAD PASS')
+          PY
+      - name: Upload site preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: nw-floodwatch-site-${{ inputs.run_mode }}-${{ github.run_id }}
+          path: web_runtime/site
+          if-no-files-found: error
+          retention-days: 14
