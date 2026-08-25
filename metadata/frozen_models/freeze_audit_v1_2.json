@@ -1,0 +1,23 @@
+{
+  "version": "1.2",
+  "overall_status": "PASS_FROZEN_DEVELOPMENT__FINAL_TEST_SEALED",
+  "selected_configs": {
+    "24": "M2_HGB_W2_LR0p1_LEAF31_L21p0",
+    "48": "M2_HGB_W2_LR0p1_LEAF31_L21p0",
+    "72": "M2_HGB_W1_LR0p05_LEAF15_L21p0"
+  },
+  "oof_validation_rows": 62502,
+  "oof_validation_max_year": 2022,
+  "calibration_method": "PLATT_ON_POOLED_OOF_VALIDATION_2014_2022",
+  "threshold_policies": [
+    "MAX_CSI",
+    "RECALL80_MAX_PRECISION"
+  ],
+  "final_base_model_training": "F3_FIT_ONLY_THROUGH_2019",
+  "f3_test_predictions_generated": false,
+  "f3_test_scoring_performed": false,
+  "f1_f2_test_used": false,
+  "final_holdout": "F3_TEST_2023_2025",
+  "development_models_state": "CLOSED_FROZEN_V1_2",
+  "next_step": "Run a separate one-shot final holdout evaluation on F3 TEST 2023-2025 only."
+}

@@ -1,0 +1,42 @@
+============================================================================================================================================================================================================================
+NW HYDROCLIMATE — FROZEN DEVELOPMENT FLOOD MODELS v1.2
+============================================================================================================================================================================================================================
+OVERALL STATUS                     : PASS_FROZEN_DEVELOPMENT__FINAL_TEST_SEALED
+OOF validation rows                : 62502
+OOF validation max year            : 2022
+F3 TEST predictions generated       : False
+F3 TEST scoring performed            : False
+Final holdout                       : F3 TEST 2023-2025
+
+FROZEN MODEL PROTOCOL
+ horizon_hours              frozen_config_id             model_name          weighting_strategy                                                    hyperparameters_json base_model_training_partition                       calibration_method  threshold_max_csi  threshold_recall80_max_precision             final_holdout  test_predictions_generated
+            24  M2_HGB_W2_LR0p1_LEAF31_L21p0 HIST_GRADIENT_BOOSTING RECEPTOR_BALANCED_WEIGHTING  {"l2_regularization": 1.0, "learning_rate": 0.1, "max_leaf_nodes": 31}     F3_FIT_ONLY__THROUGH_2019 PLATT_ON_POOLED_OOF_VALIDATION_2014_2022              0.321                             0.132 F3_TEST_2023_2025__SEALED                       False
+            48  M2_HGB_W2_LR0p1_LEAF31_L21p0 HIST_GRADIENT_BOOSTING RECEPTOR_BALANCED_WEIGHTING  {"l2_regularization": 1.0, "learning_rate": 0.1, "max_leaf_nodes": 31}     F3_FIT_ONLY__THROUGH_2019 PLATT_ON_POOLED_OOF_VALIDATION_2014_2022              0.355                             0.095 F3_TEST_2023_2025__SEALED                       False
+            72 M2_HGB_W1_LR0p05_LEAF15_L21p0 HIST_GRADIENT_BOOSTING       NATURAL_ROW_WEIGHTING {"l2_regularization": 1.0, "learning_rate": 0.05, "max_leaf_nodes": 15}     F3_FIT_ONLY__THROUGH_2019 PLATT_ON_POOLED_OOF_VALIDATION_2014_2022              0.340                             0.078 F3_TEST_2023_2025__SEALED                       False
+
+CALIBRATION DEVELOPMENT DIAGNOSTICS
+ horizon_hours  development_validation_rows  development_positive_rows  raw_average_precision  calibrated_average_precision  raw_brier_score  calibrated_brier_score  raw_log_loss  calibrated_log_loss  platt_intercept  platt_coefficient                                             diagnostic_scope
+            24                        21011                       1210               0.695954                      0.695954         0.030950                0.028996      0.120199             0.103797         0.487926           0.749802 DEVELOPMENT_ONLY__CALIBRATOR_FIT_ON_SAME_OOF_VALIDATION_POOL
+            48                        20833                       1568               0.660717                      0.660717         0.041753                0.040202      0.161048             0.146341         0.349350           0.784342 DEVELOPMENT_ONLY__CALIBRATOR_FIT_ON_SAME_OOF_VALIDATION_POOL
+            72                        20658                       1890               0.637305                      0.637305         0.051821                0.050992      0.188707             0.185433         0.434230           1.039436 DEVELOPMENT_ONLY__CALIBRATOR_FIT_ON_SAME_OOF_VALIDATION_POOL
+
+DEVELOPMENT THRESHOLDS
+ horizon_hours       threshold_policy  threshold  development_csi  development_precision  development_recall  development_tp  development_fp  development_fn  development_tn                                       metric_scope
+            24                MAX_CSI      0.321         0.465328               0.638032            0.632231             765             434             445           19367 DEVELOPMENT_VALIDATION_ONLY__NOT_FINAL_PERFORMANCE
+            24 RECALL80_MAX_PRECISION      0.132         0.430414               0.482312            0.800000             968            1039             242           18762 DEVELOPMENT_VALIDATION_ONLY__NOT_FINAL_PERFORMANCE
+            48                MAX_CSI      0.355         0.441895               0.669690            0.565051             886             437             682           18828 DEVELOPMENT_VALIDATION_ONLY__NOT_FINAL_PERFORMANCE
+            48 RECALL80_MAX_PRECISION      0.095         0.346494               0.379269            0.800383            1255            2054             313           17211 DEVELOPMENT_VALIDATION_ONLY__NOT_FINAL_PERFORMANCE
+            72                MAX_CSI      0.340         0.420776               0.640615            0.550794            1041             584             849           18184 DEVELOPMENT_VALIDATION_ONLY__NOT_FINAL_PERFORMANCE
+            72 RECALL80_MAX_PRECISION      0.078         0.290100               0.312784            0.800000            1512            3322             378           15446 DEVELOPMENT_VALIDATION_ONLY__NOT_FINAL_PERFORMANCE
+
+IMPORTANT
+Benchmark-selected configurations are now frozen.
+Calibration and thresholds use development validation only.
+Post-calibration metrics are development diagnostics, not final unbiased performance.
+No TEST prediction has been generated.
+
+Frozen protocol : /Users/giordana/Desktop/Progetti vari pratici/Clima/programma/MedSea_Copernicus_Pipeline_v1/nw_flood_models_frozen_development_v1_2/frozen_model_protocol_v1_2.csv
+OOF predictions : /Users/giordana/Desktop/Progetti vari pratici/Clima/programma/MedSea_Copernicus_Pipeline_v1/nw_flood_models_frozen_development_v1_2/oof_validation_predictions_v1_2.parquet
+Thresholds      : /Users/giordana/Desktop/Progetti vari pratici/Clima/programma/MedSea_Copernicus_Pipeline_v1/nw_flood_models_frozen_development_v1_2/development_threshold_registry_v1_2.csv
+Models          : /Users/giordana/Desktop/Progetti vari pratici/Clima/programma/MedSea_Copernicus_Pipeline_v1/nw_flood_models_frozen_development_v1_2/models
+Output          : /Users/giordana/Desktop/Progetti vari pratici/Clima/programma/MedSea_Copernicus_Pipeline_v1/nw_flood_models_frozen_development_v1_2

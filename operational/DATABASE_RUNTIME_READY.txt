@@ -1,0 +1,6 @@
+NW FloodWatch runtime database READY
+Source: /Users/giordana/Desktop/Progetti vari pratici/Clima/programma/MedSea_Copernicus_Pipeline_v1
+Files: 36
+Bytes: 162777141
+Manifest: DATABASE_RUNTIME_MANIFEST_SHA256.csv
+Status: PASS_RUNTIME_DATABASE_ASSEMBLED

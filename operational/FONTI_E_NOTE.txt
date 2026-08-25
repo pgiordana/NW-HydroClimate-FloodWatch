@@ -1,0 +1,19 @@
+NW FloodWatch - fonti e note sintetiche
+
+Input operativo:
+- ECMWF IFS Open Data
+- Copernicus Marine Mediterranean Physics Analysis/Forecast
+
+Base storica/modeling:
+- ERA5 e prodotti MedSea storici
+- osservazioni idrometeorologiche Piemonte, Valle d'Aosta e Liguria
+- descrittori statici dei 20 recettori
+- periodo modellistico: settembre-dicembre
+- anni del database storico: 1987-2025
+
+Target del modello:
+- superamento della soglia statistica Q95 del target idrologico entro 24/48/72 h
+- non coincide automaticamente con una soglia ufficiale di allerta o con la probabilita di alluvione
+
+Il software conserva checksum dei modelli congelati e audit di ogni run.
+Consultare sempre i termini d'uso e le condizioni di licenza dei provider originali prima di redistribuire i relativi dati.
