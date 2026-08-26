@@ -1,1 +1,211 @@
-<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NW FloodWatch</title><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"></head><body><header><div><small>METEOROLOGIA E CURA DEL TERRITORIO</small><h1>NW FloodWatch</h1><p>Bollettino sperimentale probabilistico di condizioni idrologiche estreme</p></div></header><main><section class="warning"><strong>PROGETTO SPERIMENTALE — NON È UN SISTEMA UFFICIALE DI ALLERTAMENTO.</strong><p>Non sostituisce bollettini, allerte o valutazioni di ARPA, Centri Funzionali, Protezione Civile e altri soggetti competenti. Validità sperimentale: 1 settembre–31 dicembre.</p></section><section class="grid"><article><span>Stato run</span><b id="runMode">Caricamento…</b></article><article><span>Data emissione</span><b id="issueDate">—</b></article><article><span>Interpretazione</span><b id="science">—</b></article><article><span>Recettori</span><b id="count">20</b></article></section><section class="panel"><h2>Situazione generale</h2><ul id="summary"><li>Caricamento…</li></ul><a id="pdf" href="#" hidden>Apri bollettino PDF</a></section><section class="panel"><h2>Mappa dei recettori</h2><div id="map"></div></section><section class="panel"><h2>Probabilità per recettore</h2><div class="scroll"><table><thead><tr><th>Recettore</th><th>24 h</th><th>48 h</th><th>72 h</th><th>Stato</th><th>Nota</th></tr></thead><tbody id="rows"></tbody></table></div></section><section class="note">Le probabilità rappresentano la stima calibrata di superamento della soglia statistica Q95 del target idrologico del modello. Non equivalgono automaticamente alla probabilità di un'alluvione né al superamento di una soglia ufficiale regionale.</section></main><footer>NW FloodWatch · progetto sperimentale e non ufficiale</footer><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="app.js"></script></body></html>
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="NW FloodWatch: progetto sperimentale e non ufficiale di previsione probabilistica delle piene nel Nord-Ovest italiano.">
+  <meta name="theme-color" content="#0b2740">
+  <title>NW FloodWatch · Previsione sperimentale</title>
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="unofficial-bar" role="note" aria-label="Avvertenza principale">
+    <span class="unofficial-dot" aria-hidden="true"></span>
+    <strong>PROGETTO SPERIMENTALE · NON UFFICIALE</strong>
+    <span>Non è un servizio di allertamento e non pubblica bollettini ufficiali.</span>
+  </div>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="#top" aria-label="NW FloodWatch home">
+        <span class="brand-mark" aria-hidden="true">NW</span>
+        <span>
+          <span class="eyebrow">Meteorologia e cura del territorio</span>
+          <strong>NW FloodWatch</strong>
+        </span>
+      </a>
+      <nav aria-label="Navigazione principale">
+        <a href="#mappa">Mappa</a>
+        <a href="#dati">Dati</a>
+        <a href="#metodo">Come leggere</a>
+        <a id="navPdf" href="#report" class="nav-cta">Report PDF</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero shell">
+      <div class="hero-copy">
+        <span class="hero-kicker">Previsione probabilistica sperimentale · Piemonte · Valle d'Aosta · Liguria</span>
+        <h1>Un quadro territoriale immediato, <span>senza confonderlo con un'allerta ufficiale.</span></h1>
+        <p>
+          NW FloodWatch elabora dati meteorologici e marini e stima, per 20 bacini monitorati,
+          la probabilità di superamento della soglia statistica idrologica Q95 entro 24, 48 e 72 ore.
+        </p>
+        <div class="hero-actions">
+          <a class="button primary" href="#mappa">Esplora la mappa</a>
+          <a id="heroPdf" class="button secondary" href="#report" aria-disabled="true">Scarica il report sperimentale</a>
+        </div>
+      </div>
+
+      <aside class="hero-status" aria-label="Stato dell'ultima elaborazione">
+        <div class="status-topline">
+          <span>Ultima elaborazione</span>
+          <span id="livePill" class="pill neutral">Caricamento…</span>
+        </div>
+        <div class="status-date" id="issueDate">—</div>
+        <div class="status-meta">
+          <div><span>Run</span><strong id="runId">—</strong></div>
+          <div><span>Recettori</span><strong id="count">20</strong></div>
+          <div><span>Validità</span><strong id="science">—</strong></div>
+        </div>
+        <p id="statusMessage" class="status-message">Caricamento dello stato operativo…</p>
+      </aside>
+    </section>
+
+    <section class="shell disclaimer" aria-labelledby="disclaimerTitle">
+      <div class="disclaimer-icon" aria-hidden="true">!</div>
+      <div>
+        <h2 id="disclaimerTitle">Informazione sperimentale, non bollettino ufficiale</h2>
+        <p>
+          Questo sito è un progetto personale di ricerca. Le probabilità, i colori e i report qui pubblicati
+          <strong>non costituiscono allerta, previsione o bollettino ufficiale</strong> e non sostituiscono in alcun modo
+          ARPA, Centri Funzionali regionali, Protezione Civile, gestori o altri soggetti istituzionalmente competenti.
+          La validità sperimentale del modello è limitata al periodo <strong>1 settembre–31 dicembre</strong>.
+        </p>
+      </div>
+    </section>
+
+    <section id="mappa" class="shell section-block">
+      <div class="section-heading map-heading">
+        <div>
+          <span class="section-kicker">Quadro territoriale</span>
+          <h2>Mappa sperimentale dei bacini</h2>
+          <p>I bacini assumono il colore dello stato complessivo prodotto dal modello. Il colore non equivale a un livello di allerta ufficiale.</p>
+        </div>
+        <div class="legend" aria-label="Legenda sperimentale">
+          <span><i class="legend-swatch green"></i> Verde <small>segnale ordinario</small></span>
+          <span><i class="legend-swatch yellow"></i> Giallo <small>da approfondire</small></span>
+          <span><i class="legend-swatch red"></i> Rosso <small>segnale elevato</small></span>
+          <span><i class="legend-swatch gray"></i> Grigio <small>non interpretabile</small></span>
+        </div>
+      </div>
+
+      <div id="seasonNotice" class="season-notice" hidden>
+        <strong>Fuori dal periodo di validità sperimentale.</strong>
+        I colori e i valori numerici di questo run non devono essere interpretati come previsione di piena.
+      </div>
+
+      <div class="map-card">
+        <div id="map" aria-label="Mappa interattiva dei bacini NW FloodWatch"></div>
+        <aside id="basinPanel" class="basin-panel" aria-live="polite">
+          <div class="panel-placeholder">
+            <span class="panel-placeholder-icon">↗</span>
+            <h3>Seleziona un bacino</h3>
+            <p>Clicca sulla mappa per visualizzare probabilità 24/48/72 h, stato sperimentale e nota interpretativa.</p>
+          </div>
+        </aside>
+      </div>
+      <p class="map-footnote">Base cartografica © OpenStreetMap contributors. Le geometrie dei bacini appartengono al dataset operativo NW FloodWatch.</p>
+    </section>
+
+    <section id="dati" class="shell section-block">
+      <div class="section-heading split-heading">
+        <div>
+          <span class="section-kicker">Dettaglio numerico</span>
+          <h2>Probabilità per bacino</h2>
+          <p>Stima calibrata di superamento della soglia statistica Q95 del target idrologico del modello.</p>
+        </div>
+        <label class="search-box">
+          <span>Filtra bacini</span>
+          <input id="basinSearch" type="search" placeholder="es. Tanaro, Dora, Bisagno…" autocomplete="off">
+        </label>
+      </div>
+
+      <div class="table-card">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Bacino</th>
+                <th>24 h</th>
+                <th>48 h</th>
+                <th>72 h</th>
+                <th>Stato sperimentale</th>
+                <th>Nota</th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+      </div>
+      <p class="data-note">
+        Le percentuali non equivalgono automaticamente alla probabilità di un'alluvione e non rappresentano il superamento di soglie ufficiali regionali.
+      </p>
+    </section>
+
+    <section id="report" class="shell report-card section-block">
+      <div>
+        <span class="section-kicker">Documento completo</span>
+        <h2>Report previsionale sperimentale PDF</h2>
+        <p>
+          Il PDF riporta l'elaborazione del run, le probabilità per i 20 recettori, le note di tracciabilità e le avvertenze d'uso.
+          Anche questo documento è sperimentale e non è un bollettino ufficiale.
+        </p>
+      </div>
+      <a id="pdf" class="button primary large" href="#" hidden download>Scarica il report PDF</a>
+    </section>
+
+    <section id="metodo" class="shell section-block reading-grid">
+      <article>
+        <span class="number">01</span>
+        <h3>Cosa rappresentano i colori</h3>
+        <p>Una sintesi grafica dello stato sperimentale assegnato dal modello al singolo bacino, non una classificazione di allerta pubblica.</p>
+      </article>
+      <article>
+        <span class="number">02</span>
+        <h3>Cosa rappresentano le percentuali</h3>
+        <p>La probabilità calibrata di superamento della soglia statistica Q95 del target idrologico entro gli orizzonti di 24, 48 e 72 ore.</p>
+      </article>
+      <article>
+        <span class="number">03</span>
+        <h3>Quando è interpretabile</h3>
+        <p>Solo se il gate operativo autorizza l'interpretazione scientifica e solo nel periodo sperimentale 1 settembre–31 dicembre.</p>
+      </article>
+    </section>
+
+    <section class="shell provenance section-block">
+      <div>
+        <span class="section-kicker">Tracciabilità</span>
+        <h2>Stato tecnico dell'elaborazione</h2>
+      </div>
+      <dl class="provenance-grid">
+        <div><dt>Modalità</dt><dd id="runMode">—</dd></div>
+        <div><dt>Generato</dt><dd id="generatedAt">—</dd></div>
+        <div><dt>Inferenza modello</dt><dd id="modelInference">—</dd></div>
+        <div><dt>Gate prospettico</dt><dd id="betaAllowed">—</dd></div>
+      </dl>
+      <ul id="summary" class="summary-list"><li>Caricamento…</li></ul>
+    </section>
+  </main>
+
+  <footer>
+    <div class="shell footer-grid">
+      <div>
+        <strong>NW FloodWatch</strong>
+        <p>Progetto sperimentale e non ufficiale di previsione probabilistica delle piene nel Nord-Ovest italiano.</p>
+      </div>
+      <div class="footer-warning">
+        <strong>NON È UN SERVIZIO DI ALLERTAMENTO</strong>
+        <span>Fare sempre riferimento alle fonti e alle autorità ufficiali competenti.</span>
+      </div>
+    </div>
+  </footer>
+
+  <noscript><div class="noscript">Per visualizzare la mappa interattiva è necessario JavaScript.</div></noscript>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="app.js"></script>
+</body>
+</html>
