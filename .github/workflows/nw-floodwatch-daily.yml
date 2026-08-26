@@ -1,0 +1,97 @@
+name: NW FloodWatch daily production
+
+on:
+  schedule:
+    - cron: "17 10 * * *"
+      timezone: "Europe/Rome"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nw-floodwatch-daily-production
+  cancel-in-progress: false
+
+jobs:
+  daily-production:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      PYTHONUNBUFFERED: "1"
+      COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
+      COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
+
+    steps:
+      - name: Checkout isolated web runtime branch
+        uses: actions/checkout@v4
+        with:
+          ref: web-runtime-v1
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install ECMWF freshness-check dependency
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ecmwf-opendata
+
+      - name: Require current-day ECMWF IFS 00Z
+        run: |
+          python web_runtime/wait_for_ecmwf_00z.py \
+            --interval-minutes 10 \
+            --max-wait-minutes 90
+
+      - name: Download and verify immutable NW FloodWatch runtime
+        run: python web_runtime/bootstrap_runtime.py
+
+      - name: Install full runtime dependencies
+        run: |
+          python -m pip install -r .web_runtime/runtime/NW_FloodWatch_Definitivo/requirements.txt
+
+      - name: Restore antecedent cache
+        uses: actions/cache@v4
+        with:
+          path: .web_state/antecedent_cache
+          key: nwfloodwatch-antecedent-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            nwfloodwatch-antecedent-${{ runner.os }}-
+
+      - name: Run full NW FloodWatch production chain
+        run: |
+          python web_runtime/run_web_pipeline.py \
+            --runtime-root .web_runtime/runtime/NW_FloodWatch_Definitivo \
+            --site-dir web_runtime/site \
+            --persistent-cache-dir .web_state/antecedent_cache \
+            --mode full
+
+      - name: Validate public-site payload
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          p = Path("web_runtime/site/data/latest.json")
+          d = json.loads(p.read_text(encoding="utf-8"))
+
+          assert d["schema"] == "nwfloodwatch.web.latest.v1"
+          assert d["experimental"] is True
+          assert d["official_warning_use_allowed"] is False
+          assert len(d.get("receptors", [])) == 20
+
+          print("DAILY STATIC WEB PAYLOAD PASS")
+          print("run_id=", d.get("run_id"))
+          print("issue_date=", d.get("issue_date"))
+          print("scientific_beta_interpretation=", d.get("scientific_beta_interpretation"))
+          PY
+
+      - name: Upload daily site package
+        uses: actions/upload-artifact@v4
+        with:
+          name: nw-floodwatch-daily-site-${{ github.run_id }}
+          path: web_runtime/site
+          if-no-files-found: error
+          retention-days: 30
