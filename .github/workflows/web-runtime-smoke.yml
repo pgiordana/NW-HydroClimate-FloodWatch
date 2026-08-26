@@ -29,7 +29,7 @@ jobs:
     timeout-minutes: 360
     env:
       PYTHONUNBUFFERED: "1"
-      RUN_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.run_mode || 'demo' }}
+      RUN_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.run_mode || contains(github.event.head_commit.message, '[full]') && 'full' || 'demo' }}
       COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
       COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
     steps:
