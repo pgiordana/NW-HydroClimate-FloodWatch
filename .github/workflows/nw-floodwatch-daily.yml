@@ -4,6 +4,8 @@ on:
   schedule:
     - cron: "17 10 * * *"
       timezone: "Europe/Rome"
+    - cron: "0 11 * * *"
+      timezone: "Europe/Rome"
   workflow_dispatch:
 
 permissions:
@@ -34,7 +36,67 @@ jobs:
           python-version: "3.13"
           cache: pip
 
+      - name: Decide whether today's production run is needed
+        id: production_gate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.request
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+
+          output = os.environ["GITHUB_OUTPUT"]
+          event_name = os.environ.get("EVENT_NAME", "")
+
+          # Manual runs are always intentional: never suppress them.
+          if event_name != "schedule":
+              with open(output, "a", encoding="utf-8") as f:
+                  f.write("needs_run=true\n")
+              print(f"Event {event_name!r}: production run explicitly requested.")
+              raise SystemExit(0)
+
+          today = datetime.now(ZoneInfo("Europe/Rome")).date().isoformat()
+          url = f"https://nw-floodwatch.pages.dev/data/latest.json?gate={int(time.time())}"
+
+          try:
+              req = urllib.request.Request(
+                  url,
+                  headers={
+                      "Cache-Control": "no-cache",
+                      "User-Agent": "NW-FloodWatch-Schedule-Gate",
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=20) as response:
+                  remote = json.loads(response.read().decode("utf-8"))
+              issue_date = remote.get("issue_date")
+              print(f"Published issue_date={issue_date!r}; today={today!r}")
+
+              if issue_date == today:
+                  with open(output, "a", encoding="utf-8") as f:
+                      f.write("needs_run=false\n")
+                  print("Today's site is already published: scheduled fallback will exit cleanly.")
+              else:
+                  with open(output, "a", encoding="utf-8") as f:
+                      f.write("needs_run=true\n")
+                  print("Today's site is not yet published: full production run is required.")
+          except Exception as exc:
+              # Fail open: inability to check the public site must never suppress production.
+              print(f"Freshness gate could not verify the public site ({type(exc).__name__}: {exc}).")
+              print("Fail-open policy: full production run will proceed.")
+              with open(output, "a", encoding="utf-8") as f:
+                  f.write("needs_run=true\n")
+          PY
+
+      - name: Production already current
+        if: ${{ steps.production_gate.outputs.needs_run == 'false' }}
+        run: echo "NW FloodWatch is already published for today; no duplicate production run is needed."
+
       - name: Verify required deployment secrets
+        if: ${{ steps.production_gate.outputs.needs_run == 'true' }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -44,24 +106,29 @@ jobs:
           echo "Cloudflare deployment secrets present."
 
       - name: Install ECMWF freshness-check dependency
+        if: ${{ steps.production_gate.outputs.needs_run == 'true' }}
         run: |
           python -m pip install --upgrade pip
           python -m pip install ecmwf-opendata
 
       - name: Require current-day ECMWF IFS 00Z
+        if: ${{ steps.production_gate.outputs.needs_run == 'true' }}
         run: |
           python web_runtime/wait_for_ecmwf_00z.py \
             --interval-minutes 10 \
             --max-wait-minutes 90
 
       - name: Download and verify immutable NW FloodWatch runtime
+        if: ${{ steps.production_gate.outputs.needs_run == 'true' }}
         run: python web_runtime/bootstrap_runtime.py
 
       - name: Install full runtime dependencies
+        if: ${{ steps.production_gate.outputs.needs_run == 'true' }}
         run: |
           python -m pip install -r .web_runtime/runtime/NW_FloodWatch_Definitivo/requirements.txt
 
       - name: Restore antecedent cache
+        if: ${{ steps.production_gate.outputs.needs_run == 'true' }}
         uses: actions/cache@v4
         with:
           path: .web_state/antecedent_cache
@@ -70,6 +137,7 @@ jobs:
             nwfloodwatch-antecedent-${{ runner.os }}-
 
       - name: Run full NW FloodWatch production chain
+        if: ${{ steps.production_gate.outputs.needs_run == 'true' }}
         run: |
           python web_runtime/run_web_pipeline.py \
             --runtime-root .web_runtime/runtime/NW_FloodWatch_Definitivo \
@@ -78,6 +146,7 @@ jobs:
             --mode full
 
       - name: Validate public-site payload
+        if: ${{ steps.production_gate.outputs.needs_run == 'true' }}
         run: |
           python - <<'PY'
           import json
@@ -98,6 +167,7 @@ jobs:
           PY
 
       - name: Deploy current site to Cloudflare Pages
+        if: ${{ steps.production_gate.outputs.needs_run == 'true' }}
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -105,6 +175,7 @@ jobs:
           command: pages deploy web_runtime/site --project-name=nw-floodwatch --branch=main
 
       - name: Verify public deployment matches this run
+        if: ${{ steps.production_gate.outputs.needs_run == 'true' }}
         run: |
           python - <<'PY'
           import json
@@ -144,7 +215,7 @@ jobs:
           PY
 
       - name: Upload daily site package
-        if: always()
+        if: ${{ always() && steps.production_gate.outputs.needs_run == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: nw-floodwatch-daily-site-${{ github.run_id }}
