@@ -112,7 +112,43 @@ export default {
     );
   },
 
-  async fetch() {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    const { date: today, time } = romeParts(new Date());
+
+    // Safe, read-only diagnostic. It validates that the Worker can read GitHub Actions
+    // with the configured secret, but it never dispatches a workflow.
+    if (url.searchParams.get("check") === "1") {
+      const siteCurrent = await siteAlreadyCurrent(today);
+      try {
+        const workflowRunning = await workflowAlreadyRunning(env, today);
+        return Response.json({
+          service: "NW FloodWatch Cloudflare Scheduler",
+          status: "ok",
+          github_auth: "ok",
+          site_current: siteCurrent,
+          workflow_running: workflowRunning,
+          today,
+          local_time: time,
+          timezone: ROME_TZ,
+          target_local_times: [...TARGET_TIMES],
+        });
+      } catch (error) {
+        return Response.json(
+          {
+            service: "NW FloodWatch Cloudflare Scheduler",
+            status: "error",
+            github_auth: "failed",
+            message: String(error?.message || error),
+            today,
+            local_time: time,
+            timezone: ROME_TZ,
+          },
+          { status: 500 }
+        );
+      }
+    }
+
     return Response.json({
       service: "NW FloodWatch Cloudflare Scheduler",
       mode: "scheduled-only",
@@ -120,6 +156,7 @@ export default {
       target_local_times: [...TARGET_TIMES],
       workflow: `${OWNER}/${REPO} :: ${WORKFLOW}@${REF}`,
       status: "ok",
+      health_check: "append ?check=1 for a read-only GitHub authorization test",
     });
   },
 };
