@@ -1,0 +1,8 @@
+name = "nw-floodwatch-scheduler"
+main = "src/index.js"
+compatibility_date = "2026-08-28"
+
+[triggers]
+# Cloudflare Cron Triggers use UTC. We schedule both CET and CEST candidates;
+# the Worker itself checks Europe/Rome local time and dispatches only at 10:17 or 11:00.
+crons = ["17 8 * * *", "17 9 * * *", "0 9 * * *", "0 10 * * *"]
