@@ -154,6 +154,20 @@ def main() -> int:
         run(cmd, runtime_root, env)
 
     phase("Export static-web payload", 5, total, started)
+    site_patch = project_root / "patch_site_notice.py"
+    if not site_patch.exists():
+        raise RuntimeError(f"Site notice patch helper missing: {site_patch}")
+    run(
+        [
+            sys.executable,
+            str(site_patch),
+            "--site-dir",
+            str(site_dir),
+        ],
+        project_root,
+        env,
+    )
+
     export_cmd = [
         sys.executable,
         str(project_root / "export_web_payload.py"),
