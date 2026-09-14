@@ -78,7 +78,10 @@ def require_full_run_secrets(env: dict[str, str]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Headless Linux/web wrapper around the unchanged NW FloodWatch v1.0-rc1 runtime."
+        description=(
+            "Headless Linux/web wrapper around NW FloodWatch v1.0-rc1, "
+            "with guarded antecedent-continuity repair."
+        )
     )
     parser.add_argument("--runtime-root", required=True)
     parser.add_argument("--site-dir", required=True)
@@ -94,7 +97,7 @@ def main() -> int:
     )
     project_root = Path(__file__).resolve().parent
     started = time.time()
-    total = 5
+    total = 6
 
     runner = runtime_root / "nw_flood_watch.py"
     if not runner.exists():
@@ -117,7 +120,26 @@ def main() -> int:
     env = os.environ.copy()
     env.setdefault("PYTHONUNBUFFERED", "1")
 
-    phase("Execute unchanged scientific runtime", 3, total, started)
+    phase("Repair previous-day antecedent continuity", 3, total, started)
+    if args.mode == "full":
+        require_full_run_secrets(env)
+        repair = project_root / "backfill_previous_day.py"
+        if not repair.exists():
+            raise RuntimeError(f"Antecedent repair helper missing: {repair}")
+        run(
+            [
+                sys.executable,
+                str(repair),
+                "--runtime-root",
+                str(runtime_root),
+            ],
+            project_root,
+            env,
+        )
+    else:
+        print(f"Antecedent repair skipped for mode={args.mode}.", flush=True)
+
+    phase("Execute scientific runtime", 4, total, started)
     if args.mode == "demo":
         run([sys.executable, str(runner), "--pdf-demo"], runtime_root, env)
     else:
@@ -131,7 +153,7 @@ def main() -> int:
             cmd.append("--allow-degraded-smoke")
         run(cmd, runtime_root, env)
 
-    phase("Export static-web payload", 4, total, started)
+    phase("Export static-web payload", 5, total, started)
     export_cmd = [
         sys.executable,
         str(project_root / "export_web_payload.py"),
@@ -144,7 +166,7 @@ def main() -> int:
         export_cmd.append("--demo")
     run(export_cmd, project_root, env)
 
-    phase("Persist mutable antecedent cache", 5, total, started)
+    phase("Persist mutable antecedent cache", 6, total, started)
     if persistent_cache:
         if persistent_cache.exists():
             shutil.rmtree(persistent_cache)
