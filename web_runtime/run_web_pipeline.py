@@ -17,7 +17,11 @@ def elapsed_text(seconds: float) -> str:
         return f"{seconds:.1f}s"
     minutes, sec = divmod(int(seconds), 60)
     hours, minutes = divmod(minutes, 60)
-    return f"{hours:d}h {minutes:02d}m {sec:02d}s" if hours else f"{minutes:d}m {sec:02d}s"
+    return (
+        f"{hours:d}h {minutes:02d}m {sec:02d}s"
+        if hours
+        else f"{minutes:d}m {sec:02d}s"
+    )
 
 
 def copy_tree_overlay(src: Path, dst: Path) -> None:
@@ -37,7 +41,8 @@ def copy_tree_overlay(src: Path, dst: Path) -> None:
 def phase(label: str, idx: int, total: int, started: float) -> None:
     pct = 100.0 * idx / total
     print(
-        f"[WEB PHASE {idx}/{total}] {label} | {pct:5.1f}% | elapsed {elapsed_text(time.time()-started)}",
+        f"[WEB PHASE {idx}/{total}] {label} | {pct:5.1f}% | "
+        f"elapsed {elapsed_text(time.time()-started)}",
         flush=True,
     )
 
@@ -58,7 +63,9 @@ def run(cmd: list[str], cwd: Path, env: dict[str, str]) -> None:
         print(line, end="", flush=True)
     code = proc.wait()
     if code != 0:
-        raise RuntimeError(f"Command failed with return code {code}: {' '.join(cmd)}")
+        raise RuntimeError(
+            f"Command failed with return code {code}: {' '.join(cmd)}"
+        )
 
 
 def require_full_run_secrets(env: dict[str, str]) -> None:
@@ -72,7 +79,8 @@ def require_full_run_secrets(env: dict[str, str]) -> None:
     ]
     if missing:
         raise RuntimeError(
-            "Full operational run requires GitHub/host secrets: " + ", ".join(missing)
+            "Full operational run requires GitHub/host secrets: "
+            + ", ".join(missing)
         )
 
 
@@ -80,52 +88,96 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
             "Headless Linux/web wrapper around NW FloodWatch v1.0-rc1, "
-            "with guarded antecedent-continuity repair."
+            "with guarded antecedent repair and bounded CMEMS resilience."
         )
     )
     parser.add_argument("--runtime-root", required=True)
     parser.add_argument("--site-dir", required=True)
     parser.add_argument("--persistent-cache-dir")
-    parser.add_argument("--mode", choices=("demo", "full", "report-only"), default="demo")
+    parser.add_argument(
+        "--mode",
+        choices=("demo", "full", "report-only"),
+        default="demo",
+    )
     parser.add_argument("--allow-degraded-smoke", action="store_true")
     args = parser.parse_args()
 
     runtime_root = Path(args.runtime_root).resolve()
     site_dir = Path(args.site_dir).resolve()
     persistent_cache = (
-        Path(args.persistent_cache_dir).resolve() if args.persistent_cache_dir else None
+        Path(args.persistent_cache_dir).resolve()
+        if args.persistent_cache_dir
+        else None
     )
     project_root = Path(__file__).resolve().parent
     started = time.time()
-    total = 6
+    total = 7
 
     runner = runtime_root / "nw_flood_watch.py"
     if not runner.exists():
-        raise RuntimeError(f"NW FloodWatch runtime runner not found: {runner}")
+        raise RuntimeError(
+            f"NW FloodWatch runtime runner not found: {runner}"
+        )
 
     phase("Runtime integrity/preflight", 1, total, started)
     ready = runtime_root / "DATABASE_RUNTIME_READY.txt"
     if not ready.exists():
         raise RuntimeError(f"Runtime ready marker missing: {ready}")
-    print(ready.read_text(encoding="utf-8", errors="replace").strip(), flush=True)
+    print(
+        ready.read_text(encoding="utf-8", errors="replace").strip(),
+        flush=True,
+    )
 
     phase("Restore persistent antecedent cache", 2, total, started)
     runtime_cache = runtime_root / CACHE_DIRNAME
     if persistent_cache and persistent_cache.exists():
-        print(f"Overlay persistent cache {persistent_cache} -> {runtime_cache}", flush=True)
+        print(
+            f"Overlay persistent cache {persistent_cache} -> {runtime_cache}",
+            flush=True,
+        )
         copy_tree_overlay(persistent_cache, runtime_cache)
     else:
-        print("No previous external cache found; using cache bundled with v1.0-rc1.", flush=True)
+        print(
+            "No previous external cache found; "
+            "using cache bundled with v1.0-rc1.",
+            flush=True,
+        )
 
     env = os.environ.copy()
     env.setdefault("PYTHONUNBUFFERED", "1")
+    env.setdefault("NWF_CMEMS_MAX_ATTEMPTS", "4")
+    env.setdefault("NWF_CMEMS_ATTEMPT_TIMEOUT_SECONDS", "300")
 
-    phase("Repair previous-day antecedent continuity", 3, total, started)
+    phase("Apply bounded CMEMS retry/timeout patch", 3, total, started)
+    if args.mode == "full":
+        require_full_run_secrets(env)
+        patcher = project_root / "patch_cmems_resilience.py"
+        if not patcher.exists():
+            raise RuntimeError(f"CMEMS runtime patch helper missing: {patcher}")
+        run(
+            [
+                sys.executable,
+                str(patcher),
+                "--runtime-root",
+                str(runtime_root),
+            ],
+            project_root,
+            env,
+        )
+    else:
+        print(
+            f"CMEMS resilience patch skipped for mode={args.mode}.",
+            flush=True,
+        )
+
+    phase("Repair previous-day antecedent continuity", 4, total, started)
     if args.mode == "full":
         require_full_run_secrets(env)
         repair = project_root / "backfill_previous_day.py"
         if not repair.exists():
-            raise RuntimeError(f"Antecedent repair helper missing: {repair}")
+            raise RuntimeError(
+                f"Antecedent repair helper missing: {repair}"
+            )
         run(
             [
                 sys.executable,
@@ -137,11 +189,18 @@ def main() -> int:
             env,
         )
     else:
-        print(f"Antecedent repair skipped for mode={args.mode}.", flush=True)
+        print(
+            f"Antecedent repair skipped for mode={args.mode}.",
+            flush=True,
+        )
 
-    phase("Execute scientific runtime", 4, total, started)
+    phase("Execute scientific runtime", 5, total, started)
     if args.mode == "demo":
-        run([sys.executable, str(runner), "--pdf-demo"], runtime_root, env)
+        run(
+            [sys.executable, str(runner), "--pdf-demo"],
+            runtime_root,
+            env,
+        )
     else:
         require_full_run_secrets(env)
         cmd = [sys.executable, str(runner)]
@@ -153,10 +212,12 @@ def main() -> int:
             cmd.append("--allow-degraded-smoke")
         run(cmd, runtime_root, env)
 
-    phase("Export static-web payload", 5, total, started)
+    phase("Export static-web payload", 6, total, started)
     site_patch = project_root / "patch_site_notice.py"
     if not site_patch.exists():
-        raise RuntimeError(f"Site notice patch helper missing: {site_patch}")
+        raise RuntimeError(
+            f"Site notice patch helper missing: {site_patch}"
+        )
     run(
         [
             sys.executable,
@@ -180,18 +241,25 @@ def main() -> int:
         export_cmd.append("--demo")
     run(export_cmd, project_root, env)
 
-    phase("Persist mutable antecedent cache", 6, total, started)
+    phase("Persist mutable antecedent cache", 7, total, started)
     if persistent_cache:
         if persistent_cache.exists():
             shutil.rmtree(persistent_cache)
         if runtime_cache.exists():
             shutil.copytree(runtime_cache, persistent_cache)
-            print(f"Persistent cache saved: {persistent_cache}", flush=True)
+            print(
+                f"Persistent cache saved: {persistent_cache}",
+                flush=True,
+            )
         else:
-            print("Runtime cache not found after run; nothing persisted.", flush=True)
+            print(
+                "Runtime cache not found after run; nothing persisted.",
+                flush=True,
+            )
 
     print(
-        f"WEB PIPELINE PASS | mode={args.mode} | total elapsed {elapsed_text(time.time()-started)}",
+        f"WEB PIPELINE PASS | mode={args.mode} | "
+        f"total elapsed {elapsed_text(time.time()-started)}",
         flush=True,
     )
     return 0
