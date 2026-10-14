@@ -6,6 +6,10 @@ on:
       timezone: "Europe/Rome"
     - cron: "0 11 * * *"
       timezone: "Europe/Rome"
+    - cron: "30 12 * * *"
+      timezone: "Europe/Rome"
+    - cron: "0 14 * * *"
+      timezone: "Europe/Rome"
   workflow_dispatch:
   push:
     branches:
@@ -18,7 +22,7 @@ permissions:
 
 concurrency:
   group: nw-floodwatch-daily-production
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   daily-production:
@@ -26,6 +30,8 @@ jobs:
     timeout-minutes: 360
     env:
       PYTHONUNBUFFERED: "1"
+      NWF_CMEMS_MAX_ATTEMPTS: "4"
+      NWF_CMEMS_ATTEMPT_TIMEOUT_SECONDS: "300"
       COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
       COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
 
@@ -40,6 +46,15 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
+
+      - name: Validate web runtime helpers
+        run: |
+          python -m py_compile \
+            web_runtime/run_web_pipeline.py \
+            web_runtime/backfill_previous_day.py \
+            web_runtime/patch_site_notice.py \
+            web_runtime/cmems_resilient_subset.py \
+            web_runtime/patch_cmems_resilience.py
 
       - name: Decide whether today's production run is needed
         id: production_gate
@@ -87,7 +102,7 @@ jobs:
               )
 
               # During Sep-Dec, a current-day but blocked payload is NOT current
-              # production: the fallback schedule must retry it.
+              # production: every later fallback must retry it.
               current_and_usable = (
                   issue_date == today
                   and (
