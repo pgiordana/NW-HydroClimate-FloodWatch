@@ -64,6 +64,7 @@ jobs:
           python - <<'PY'
           import json
           import os
+          import hashlib
           import time
           import urllib.request
           from datetime import datetime
@@ -204,6 +205,14 @@ jobs:
           assert d["official_warning_use_allowed"] is False
           assert len(d.get("receptors", [])) == 20
 
+          # Each JSON must point to the actual, uniquely versioned PDF for this run.
+          pdf_relative = d.get("bulletin_pdf", "")
+          assert pdf_relative == f"downloads/NW_FloodWatch_Bollettino_{d['run_id']}.pdf", pdf_relative
+          pdf = Path("web_runtime/site") / pdf_relative
+          assert pdf.is_file() and pdf.stat().st_size > 1024, f"Missing PDF: {pdf}"
+          assert pdf.open("rb").read(5) == b"%PDF-", f"Invalid PDF: {pdf}"
+          assert d["issue_date"] == f"{d['run_id'][:4]}-{d['run_id'][4:6]}-{d['run_id'][6:8]}"
+
           print("DAILY STATIC WEB PAYLOAD PASS")
           print("run_id=", d.get("run_id"))
           print("issue_date=", d.get("issue_date"))
@@ -230,8 +239,11 @@ jobs:
           import urllib.request
           from pathlib import Path
 
+          import hashlib
           local = json.loads(Path("web_runtime/site/data/latest.json").read_text(encoding="utf-8"))
           expected = local.get("run_id")
+          local_pdf_path = Path("web_runtime/site") / local["bulletin_pdf"]
+          expected_pdf_sha256 = hashlib.sha256(local_pdf_path.read_bytes()).hexdigest()
           url = "https://nw-floodwatch.pages.dev/data/latest.json"
 
           last_error = None
@@ -253,7 +265,18 @@ jobs:
                   if got == expected:
                       assert remote.get("official_warning_use_allowed") is False
                       assert remote.get("experimental") is True
-                      print("CLOUDFLARE PUBLIC DEPLOYMENT PASS", flush=True)
+                      assert remote.get("bulletin_pdf") == local["bulletin_pdf"], "PDF link mismatch"
+                      pdf_url = "https://nw-floodwatch.pages.dev/" + remote["bulletin_pdf"]
+                      pdf_req = urllib.request.Request(
+                          pdf_url + f"?verify={int(time.time())}",
+                          headers={"Cache-Control": "no-cache", "User-Agent": "NW-FloodWatch-CI"},
+                      )
+                      with urllib.request.urlopen(pdf_req, timeout=30) as pdf_resp:
+                          online_pdf = pdf_resp.read()
+                      assert online_pdf.startswith(b"%PDF-"), "Published PDF is invalid"
+                      if hashlib.sha256(online_pdf).hexdigest() != expected_pdf_sha256:
+                          raise RuntimeError("Published PDF SHA256 differs from this run's local PDF")
+                      print("CLOUDFLARE PUBLIC DEPLOYMENT PASS | JSON and PDF SHA256 match", flush=True)
                       break
                   last_error = f"run_id mismatch: expected {expected}, got {got}"
               except Exception as exc:
