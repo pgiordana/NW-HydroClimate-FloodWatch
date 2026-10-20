@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse,json,math,shutil
+import argparse,json,math,shutil,re
 from datetime import datetime,timezone
 from pathlib import Path
 
@@ -18,6 +18,24 @@ def latest_run(root):
 def copy(src,dst):
     if src.exists(): dst.parent.mkdir(parents=True,exist_ok=True); shutil.copy2(src,dst)
 
+def verified_pdf(src, site, run_id, issue_date):
+    # Fail closed: never publish today's JSON with yesterday's or a missing PDF.
+    if not src.is_file() or src.stat().st_size < 1024:
+        raise RuntimeError(f"Missing/invalid scientific bulletin PDF: {src}")
+    with src.open("rb") as f:
+        if f.read(5) != b"%PDF-":
+            raise RuntimeError(f"Not a PDF document: {src}")
+    if not re.fullmatch(r"20[0-9]{6}T[0-9]{2}Z", str(run_id)):
+        raise RuntimeError(f"Unexpected run identifier: {run_id}")
+    if issue_date != f"{run_id[:4]}-{run_id[4:6]}-{run_id[6:8]}":
+        raise RuntimeError(f"PDF run/date mismatch: {run_id} vs {issue_date}")
+    dest_name = f"NW_FloodWatch_Bollettino_{run_id}.pdf"
+    dest = site / "downloads" / dest_name
+    copy(src, dest)
+    if not dest.is_file() or dest.stat().st_size != src.stat().st_size:
+        raise RuntimeError(f"Failed to export PDF: {dest}")
+    return "downloads/" + dest_name
+
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument('--runtime-root',required=True); ap.add_argument('--site-dir',required=True); ap.add_argument('--demo',action='store_true'); a=ap.parse_args()
     root=Path(a.runtime_root).resolve(); site=Path(a.site_dir).resolve(); (site/'data').mkdir(parents=True,exist_ok=True); (site/'downloads').mkdir(parents=True,exist_ok=True)
@@ -29,9 +47,9 @@ def main():
         payload={'schema':'nwfloodwatch.web.latest.v1','product':'NW FloodWatch','experimental':True,'official_warning_use_allowed':False,'generated_at_utc':datetime.now(timezone.utc).isoformat(timespec='seconds'),'run_id':'DEMO_LAYOUT_ONLY','issue_date':None,'bulletin_mode':'DEMO_LAYOUT_ONLY','scientific_beta_interpretation':False,'in_core_season':False,'model_inference_performed':False,'prospective_beta_allowed':False,'summary':['Demo tecnica del sito: nessuna previsione reale e nessun dato operativo da interpretare.'],'bulletin_pdf':'downloads/NW_FloodWatch_Bollettino_DEMO.pdf','receptors':rec}
     else:
         run=latest_run(root); preds=json.loads((run/'NW_FloodWatch_predictions.json').read_text()); audit=json.loads((run/'NW_FloodWatch_run_audit.json').read_text())
-        copy(run/'NW_FloodWatch_Bollettino.pdf',site/'downloads'/'LATEST_NW_FloodWatch_Bollettino.pdf')
+        pdf_path=verified_pdf(run/'NW_FloodWatch_Bollettino.pdf',site,audit.get('run_id',run.name),audit.get('issue_date'))
         rec=[{'receptor_id':x.get('receptor_id'),'label':x.get('basin_label'),'probability_24h':x.get('calibrated_probability_24h'),'probability_48h':x.get('calibrated_probability_48h'),'probability_72h':x.get('calibrated_probability_72h'),'overall_semaphore':x.get('overall_semaphore','GRAY'),'action_note':x.get('action_note','')} for x in preds]
-        payload={'schema':'nwfloodwatch.web.latest.v1','product':'NW FloodWatch','experimental':True,'official_warning_use_allowed':False,'generated_at_utc':datetime.now(timezone.utc).isoformat(timespec='seconds'),'run_id':audit.get('run_id',run.name),'issue_date':audit.get('issue_date'),'bulletin_mode':audit.get('bulletin_mode'),'scientific_beta_interpretation':audit.get('scientific_beta_interpretation',False),'in_core_season':audit.get('in_core_season',False),'model_inference_performed':audit.get('model_inference_performed',False),'prospective_beta_allowed':audit.get('prospective_beta_allowed',False),'summary':audit.get('summary',[]),'bulletin_pdf':'downloads/LATEST_NW_FloodWatch_Bollettino.pdf','receptors':rec}
+        payload={'schema':'nwfloodwatch.web.latest.v1','product':'NW FloodWatch','experimental':True,'official_warning_use_allowed':False,'generated_at_utc':datetime.now(timezone.utc).isoformat(timespec='seconds'),'run_id':audit.get('run_id',run.name),'issue_date':audit.get('issue_date'),'bulletin_mode':audit.get('bulletin_mode'),'scientific_beta_interpretation':audit.get('scientific_beta_interpretation',False),'in_core_season':audit.get('in_core_season',False),'model_inference_performed':audit.get('model_inference_performed',False),'prospective_beta_allowed':audit.get('prospective_beta_allowed',False),'summary':audit.get('summary',[]),'bulletin_pdf':pdf_path,'receptors':rec}
     (site/'data'/'latest.json').write_text(json.dumps(clean(payload),ensure_ascii=False,indent=2,allow_nan=False),encoding='utf-8')
     print('WEB_PAYLOAD=',site/'data'/'latest.json')
 if __name__=='__main__': main()
